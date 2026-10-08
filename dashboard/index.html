@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PondIQ — Fish Pond Health Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── THEMES ──────────────────────────────────────────────────────── */
+    [data-theme="dark"] {
+      --bg:      #0d1117; --surface: #161b22; --surface2: #1c2128;
+      --border:  #30363d; --text:    #e6edf3; --muted:    #8b949e;
+    }
+    [data-theme="light"] {
+      --bg:      #f6f8fa; --surface: #ffffff; --surface2: #f0f2f5;
+      --border:  #d0d7de; --text:    #1f2328; --muted:    #57606a;
+    }
+    :root {
+      --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+      --orange: #f0883e; --red:   #f85149; --teal:   #39d353;
+      --purple: #bc8cff;
+    }
+
+    body { font-family: -apple-system,"Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; transition: background 0.3s, color 0.3s; }
+
+    /* ── HEADER ──────────────────────────────────────────────────────── */
+    header { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 28px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:200; }
+    .logo { display:flex; align-items:center; gap:10px; }
+    .logo-icon { font-size:26px; }
+    .logo h1 { font-size:19px; font-weight:700; letter-spacing:-0.5px; }
+    .logo span { font-size:11px; color:var(--muted); display:block; margin-top:1px; }
+    .header-right { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    #clock { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .live-dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+    .live-label { font-size:12px; color:var(--green); display:flex; align-items:center; gap:5px; }
+
+    /* ── POND TABS ────────────────────────────────────────────────────── */
+    .pond-tabs { display:flex; gap:6px; align-items:center; }
+    .pond-tab { padding:5px 14px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; cursor:pointer; transition:all .2s; }
+    .pond-tab.active { background:var(--accent); border-color:var(--accent); color:#000; font-weight:600; }
+    .pond-tab .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; }
+
+    /* ── THEME TOGGLE ─────────────────────────────────────────────────── */
+    .theme-btn { padding:5px 12px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-size:12px; cursor:pointer; transition:all .2s; }
+    .theme-btn:hover { background:var(--border); }
+
+    /* ── LAYOUT ──────────────────────────────────────────────────────── */
+    main { max-width:1440px; margin:0 auto; padding:20px 22px 48px; }
+
+    /* ── ALERT BANNER ────────────────────────────────────────────────── */
+    #alert-banner { display:none; padding:11px 18px; border-radius:8px; font-size:13px; font-weight:600; margin-bottom:16px; border-left:4px solid; animation:slideIn .3s ease; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .alert-critical { background:rgba(248,81,73,.12);  border-color:var(--red);    color:var(--red); }
+    .alert-warning  { background:rgba(210,153,34,.12); border-color:var(--yellow); color:var(--yellow); }
+    .alert-normal   { background:rgba(63,185,80,.12);  border-color:var(--green);  color:var(--green); }
+
+    /* ── CONTROLS ────────────────────────────────────────────────────── */
+    .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+    .btn { padding:7px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:12px; cursor:pointer; transition:all .2s; font-weight:500; }
+    .btn:hover { background:var(--border); }
+    .btn.active { background:var(--accent); border-color:var(--accent); color:#000; }
+    .btn.danger { border-color:var(--red); color:var(--red); }
+    .btn.danger:hover { background:rgba(248,81,73,.15); }
+    .btn.success { border-color:var(--green); color:var(--green); }
+    .btn.success:hover { background:rgba(63,185,80,.15); }
+
+    /* ── KPI CARDS ───────────────────────────────────────────────────── */
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:20px; }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; position:relative; overflow:hidden; transition:border-color .3s,transform .15s; }
+    .kpi-card:hover { transform:translateY(-1px); }
+    .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:10px 10px 0 0; }
+    .kpi-card.blue::before   { background:var(--accent); }
+    .kpi-card.green::before  { background:var(--green); }
+    .kpi-card.orange::before { background:var(--orange); }
+    .kpi-card.teal::before   { background:var(--teal); }
+    .kpi-card.yellow::before { background:var(--yellow); }
+    .kpi-card.purple::before { background:var(--purple); }
+    .kpi-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:7px; }
+    .kpi-value { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+    .kpi-unit  { font-size:12px; color:var(--muted); margin-left:3px; font-weight:400; }
+    .kpi-delta { font-size:11px; color:var(--muted); margin-top:5px; }
+    .kpi-icon  { position:absolute; top:14px; right:14px; font-size:20px; opacity:.35; }
+    /* mini sparkline inside kpi card */
+    .kpi-spark { margin-top:8px; height:28px; }
+
+    /* ── SECTION TITLE ───────────────────────────────────────────────── */
+    .section-title { font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px; margin-top:24px; display:flex; align-items:center; gap:8px; }
+    .section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    /* ── CHART GRID ──────────────────────────────────────────────────── */
+    .chart-grid-2 { display:grid; grid-template-columns:2fr 1fr; gap:14px; margin-bottom:14px; }
+    .chart-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+    .chart-grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:14px; }
+    .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+    .chart-card h3 { font-size:12px; font-weight:600; margin-bottom:12px; color:var(--text); }
+    .chart-card canvas { width:100%!important; }
+
+    /* ── FISH HEALTH SCORE ───────────────────────────────────────────── */
+    .health-score-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; min-height:160px; gap:6px; }
+    .health-ring { position:relative; width:130px; height:130px; }
+    .health-ring canvas { position:absolute; top:0; left:0; }
+    .health-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; }
+    .health-num  { font-size:32px; font-weight:700; line-height:1; }
+    .health-text { font-size:11px; color:var(--muted); margin-top:2px; }
+    .health-grade { font-size:13px; font-weight:600; margin-top:6px; }
+
+    /* ── PREDICTION CARDS ────────────────────────────────────────────── */
+    .prediction-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+    .prediction-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; text-align:center; }
+    .pred-title { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px; }
+    .pred-value { font-size:20px; font-weight:700; margin-bottom:5px; }
+    .pred-label { font-size:11px; color:var(--muted); }
+    .pred-bar   { height:5px; background:var(--border); border-radius:3px; margin-top:10px; overflow:hidden; }
+    .pred-bar-fill { height:100%; border-radius:3px; transition:width .5s ease; }
+
+    /* ── WEATHER PANEL ───────────────────────────────────────────────── */
+    .weather-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+    .weather-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; text-align:center; }
+    .weather-icon { font-size:28px; margin-bottom:6px; }
+    .weather-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; margin-bottom:4px; }
+    .weather-val { font-size:18px; font-weight:700; }
+
+    /* ── STATS ROW ───────────────────────────────────────────────────── */
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; }
+    .stat-label { font-size:11px; color:var(--muted); }
+    .stat-val   { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+
+    /* ── GAUGE ───────────────────────────────────────────────────────── */
+    .gauge-wrap { display:flex; justify-content:center; align-items:center; flex-direction:column; padding:8px 0; }
+    .gauge-value { font-size:30px; font-weight:700; margin-top:-8px; }
+    .gauge-label { font-size:11px; color:var(--muted); margin-top:3px; }
+
+    /* ── MODEL STATUS ────────────────────────────────────────────────── */
+    .model-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:10px; }
+    .model-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; align-items:center; gap:12px; }
+    .model-icon { font-size:24px; }
+    .model-info { flex:1; }
+    .model-name { font-size:12px; font-weight:600; }
+    .model-desc { font-size:10px; color:var(--muted); margin-top:2px; }
+    .model-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+    .badge-ready   { background:rgba(63,185,80,.15);  color:var(--green); }
+    .badge-running { background:rgba(88,166,255,.15); color:var(--accent); }
+
+    /* ── ALERTS LOG ──────────────────────────────────────────────────── */
+    .alerts-log { background:var(--surface); border:1px solid var(--border); border-radius:10px; max-height:220px; overflow-y:auto; }
+    .alert-item { padding:10px 16px; border-bottom:1px solid var(--border); font-size:12px; display:flex; gap:12px; align-items:flex-start; }
+    .alert-item:last-child { border-bottom:none; }
+    .alert-time { color:var(--muted); white-space:nowrap; font-variant-numeric:tabular-nums; min-width:70px; }
+    .alert-msg  { flex:1; }
+
+    /* ── TABLE ───────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    thead th { background:var(--surface); padding:9px 12px; text-align:left; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    tbody tr { border-bottom:1px solid var(--border); transition:background .15s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:rgba(255,255,255,.03); }
+    tbody td { padding:8px 12px; font-variant-numeric:tabular-nums; }
+    .tag { display:inline-block; padding:2px 7px; border-radius:12px; font-size:10px; font-weight:600; }
+    .tag-critical { background:rgba(248,81,73,.15);  color:var(--red); }
+    .tag-warning  { background:rgba(210,153,34,.15); color:var(--yellow); }
+    .tag-normal   { background:rgba(63,185,80,.15);  color:var(--green); }
+    .tag-on  { background:rgba(88,166,255,.15); color:var(--accent); }
+    .tag-off { background:rgba(139,148,158,.15); color:var(--muted); }
+
+    /* ── NOTIFICATION TOAST ──────────────────────────────────────────── */
+    #toast { position:fixed; bottom:24px; right:24px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 18px; font-size:13px; max-width:320px; z-index:999; box-shadow:0 8px 24px rgba(0,0,0,.3); transform:translateY(80px); opacity:0; transition:all .35s cubic-bezier(.34,1.56,.64,1); pointer-events:none; }
+    #toast.show { transform:translateY(0); opacity:1; }
+
+    /* ── UPTIME BAR ──────────────────────────────────────────────────── */
+    .uptime-bar { display:flex; gap:2px; margin-top:6px; }
+    .uptime-seg { flex:1; height:10px; border-radius:2px; min-width:4px; }
+
+    footer { text-align:center; font-size:11px; color:var(--muted); border-top:1px solid var(--border); padding:16px; margin-top:36px; }
+
+    @media(max-width:1000px){
+      .chart-grid-2,.chart-grid-3,.chart-grid-4,.prediction-grid,.weather-grid{grid-template-columns:1fr 1fr;}
+    }
+    @media(max-width:600px){
+      .chart-grid-2,.chart-grid-3,.chart-grid-4,.prediction-grid,.weather-grid{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <canvas id="header-logo" width="200" height="56" style="display:block;border-radius:8px"></canvas>
+  </div>
+  <div class="header-right">
+    <!-- POND SELECTOR -->
+    <div class="pond-tabs">
+      <div class="pond-tab active" onclick="selectPond(0)"><span class="dot" style="background:#3fb950"></span>Pond A</div>
+      <div class="pond-tab" onclick="selectPond(1)"><span class="dot" style="background:#58a6ff"></span>Pond B</div>
+      <div class="pond-tab" onclick="selectPond(2)"><span class="dot" style="background:#f0883e"></span>Pond C</div>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">☀️ Light</button>
+    <div class="live-label"><div class="live-dot"></div> LIVE</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- ── TOAST ──────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── MAIN ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- ALERT BANNER -->
+  <div id="alert-banner"></div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <button class="btn active" id="btn-play" onclick="toggleSimulation()">⏸ Pause</button>
+    <button class="btn danger" onclick="injectCrisis()">⚠️ Simulate Crisis</button>
+    <button class="btn" onclick="resetData()">🔄 Reset</button>
+    <button class="btn success" onclick="exportCSV()">⬇️ Export CSV</button>
+    <span style="font-size:12px;color:var(--muted)">Speed:</span>
+    <button class="btn" id="speed-1" onclick="setSpeed(1500)">1×</button>
+    <button class="btn active" id="speed-2" onclick="setSpeed(800)">2×</button>
+    <button class="btn" id="speed-3" onclick="setSpeed(300)">5×</button>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card blue">
+      <div class="kpi-icon">💧</div>
+      <div class="kpi-label">Dissolved Oxygen</div>
+      <div class="kpi-value"><span id="kpi-do">--</span><span class="kpi-unit">mg/L</span></div>
+      <div class="kpi-delta" id="kpi-do-delta">—</div>
+      <canvas class="kpi-spark" id="spark-do"></canvas>
+    </div>
+    <div class="kpi-card orange">
+      <div class="kpi-icon">🌡️</div>
+      <div class="kpi-label">Temperature</div>
+      <div class="kpi-value"><span id="kpi-temp">--</span><span class="kpi-unit">°C</span></div>
+      <div class="kpi-delta" id="kpi-temp-delta">—</div>
+      <canvas class="kpi-spark" id="spark-temp"></canvas>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-icon">⚗️</div>
+      <div class="kpi-label">pH Level</div>
+      <div class="kpi-value"><span id="kpi-ph">--</span></div>
+      <div class="kpi-delta" id="kpi-ph-delta">—</div>
+      <canvas class="kpi-spark" id="spark-ph"></canvas>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-icon">🌊</div>
+      <div class="kpi-label">Turbidity</div>
+      <div class="kpi-value"><span id="kpi-turb">--</span><span class="kpi-unit">NTU</span></div>
+      <div class="kpi-delta" id="kpi-turb-delta">—</div>
+      <canvas class="kpi-spark" id="spark-turb"></canvas>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-icon">🚨</div>
+      <div class="kpi-label">Status</div>
+      <div class="kpi-value" id="kpi-status" style="font-size:16px;margin-top:5px">—</div>
+      <div class="kpi-delta" id="kpi-aerator">Aerator: —</div>
+    </div>
+    <div class="kpi-card purple">
+      <div class="kpi-icon">🐠</div>
+      <div class="kpi-label">Fish Health Score</div>
+      <div class="kpi-value"><span id="kpi-health">--</span><span class="kpi-unit">/100</span></div>
+      <div class="kpi-delta" id="kpi-health-grade">—</div>
+    </div>
+  </div>
+
+  <!-- WEATHER PANEL -->
+  <div class="section-title">🌤️ Environmental Conditions</div>
+  <div class="weather-grid">
+    <div class="weather-card">
+      <div class="weather-icon" id="w-icon">⛅</div>
+      <div class="weather-label">Weather</div>
+      <div class="weather-val" id="w-condition">Partly Cloudy</div>
+    </div>
+    <div class="weather-card">
+      <div class="weather-icon">🌬️</div>
+      <div class="weather-label">Wind Speed</div>
+      <div class="weather-val"><span id="w-wind">--</span> km/h</div>
+    </div>
+    <div class="weather-card">
+      <div class="weather-icon">💦</div>
+      <div class="weather-label">Humidity</div>
+      <div class="weather-val"><span id="w-hum">--</span>%</div>
+    </div>
+    <div class="weather-card">
+      <div class="weather-icon">☁️</div>
+      <div class="weather-label">Cloud Cover</div>
+      <div class="weather-val"><span id="w-cloud">--</span>%</div>
+    </div>
+  </div>
+
+  <!-- AI PREDICTIONS -->
+  <div class="section-title">🤖 AI Model Predictions</div>
+  <div class="prediction-grid">
+    <div class="prediction-card">
+      <div class="pred-title">LSTM — Next DO Forecast</div>
+      <div class="pred-value" id="pred-do" style="color:var(--accent)">--</div>
+      <div class="pred-label">mg/L predicted next reading</div>
+      <div class="pred-bar"><div class="pred-bar-fill" id="pred-do-bar" style="background:var(--accent);width:0%"></div></div>
+    </div>
+    <div class="prediction-card">
+      <div class="pred-title">Isolation Forest — Anomaly</div>
+      <div class="pred-value" id="pred-anomaly" style="color:var(--green)">--</div>
+      <div class="pred-label" id="pred-anomaly-label">Anomaly score</div>
+      <div class="pred-bar"><div class="pred-bar-fill" id="pred-anomaly-bar" style="background:var(--green);width:0%"></div></div>
+    </div>
+    <div class="prediction-card">
+      <div class="pred-title">RF Classifier — Aerator</div>
+      <div class="pred-value" id="pred-aerator" style="color:var(--teal)">--</div>
+      <div class="pred-label" id="pred-aerator-label">Confidence</div>
+      <div class="pred-bar"><div class="pred-bar-fill" id="pred-aerator-bar" style="background:var(--teal);width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- DO CHART + GAUGE + FISH HEALTH RING -->
+  <div class="section-title">📈 Dissolved Oxygen Timeline</div>
+  <div style="display:grid;grid-template-columns:2fr .8fr .8fr;gap:14px;margin-bottom:14px">
+    <div class="chart-card">
+      <h3>DO Level — Last 60 Readings</h3>
+      <canvas id="doChart" height="120"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Current DO Gauge</h3>
+      <div class="gauge-wrap">
+        <canvas id="gaugeChart" height="150"></canvas>
+        <div class="gauge-value" id="gauge-value">--</div>
+        <div class="gauge-label" id="gauge-label">mg/L</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>🐠 Fish Health Score</h3>
+      <div class="health-score-wrap">
+        <div class="health-ring">
+          <canvas id="healthRing" width="130" height="130"></canvas>
+          <div class="health-center">
+            <div class="health-num" id="health-num">--</div>
+            <div class="health-text">/ 100</div>
+          </div>
+        </div>
+        <div class="health-grade" id="health-grade">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SENSOR CHARTS -->
+  <div class="section-title">🌡️ Sensor Parameters</div>
+  <div class="chart-grid-3">
+    <div class="chart-card"><h3>Temperature (°C)</h3><canvas id="tempChart" height="110"></canvas></div>
+    <div class="chart-card"><h3>pH Level</h3><canvas id="phChart" height="110"></canvas></div>
+    <div class="chart-card"><h3>Turbidity (NTU)</h3><canvas id="turbChart" height="110"></canvas></div>
+  </div>
+
+  <!-- RADAR + CORRELATION -->
+  <div class="section-title">📊 Analysis</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+    <div class="chart-card">
+      <h3>🕸️ Water Quality Radar</h3>
+      <canvas id="radarChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>📉 DO vs Temperature Scatter</h3>
+      <canvas id="scatterChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- UPTIME / SESSION STATS -->
+  <div class="section-title">📊 Session Statistics</div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">⏱ Uptime</div><div class="stat-val" id="stat-uptime">0s</div></div>
+    <div class="stat-card"><div class="stat-label">📦 Readings Collected</div><div class="stat-val" id="stat-readings">0</div></div>
+    <div class="stat-card"><div class="stat-label">🚨 Crisis Events</div><div class="stat-val" id="stat-crisis">0</div></div>
+    <div class="stat-card"><div class="stat-label">⚠️ Anomalies Detected</div><div class="stat-val" id="stat-anomalies">0</div></div>
+    <div class="stat-card"><div class="stat-label">🟢 Aerator Activations</div><div class="stat-val" id="stat-aerator">0</div></div>
+    <div class="stat-card"><div class="stat-label">💧 Avg DO (session)</div><div class="stat-val" id="stat-avgdo">--</div></div>
+    <div class="stat-card"><div class="stat-label">📉 Min DO (session)</div><div class="stat-val" id="stat-mindo">--</div></div>
+    <div class="stat-card"><div class="stat-label">📈 Max DO (session)</div><div class="stat-val" id="stat-maxdo">--</div></div>
+  </div>
+  <!-- Uptime health history bar -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">DO Health History (last 60 readings)</div>
+    <div class="uptime-bar" id="uptime-bar"></div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--muted)">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#3fb950;margin-right:4px"></span>Normal</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#d29922;margin-right:4px"></span>Warning</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#f85149;margin-right:4px"></span>Critical</span>
+    </div>
+  </div>
+
+  <!-- MODEL STATUS -->
+  <div class="section-title">⚙️ Model Status</div>
+  <div class="model-grid">
+    <div class="model-card"><div class="model-icon">🧠</div><div class="model-info"><div class="model-name">LSTM Forecaster</div><div class="model-desc">Predicts next DO value (4h window)</div></div><div class="model-badge badge-running">Running</div></div>
+    <div class="model-card"><div class="model-icon">🔍</div><div class="model-info"><div class="model-name">Isolation Forest</div><div class="model-desc">Detects anomalous sensor readings</div></div><div class="model-badge badge-running">Running</div></div>
+    <div class="model-card"><div class="model-icon">🌲</div><div class="model-info"><div class="model-name">Random Forest</div><div class="model-desc">Aerator ON/OFF classifier</div></div><div class="model-badge badge-running">Running</div></div>
+    <div class="model-card"><div class="model-icon">🚀</div><div class="model-info"><div class="model-name">XGBoost</div><div class="model-desc">Gradient boosted aerator classifier</div></div><div class="model-badge badge-ready">Standby</div></div>
+  </div>
+
+  <!-- ALERTS LOG -->
+  <div class="section-title">🔔 Alerts Log</div>
+  <div class="alerts-log" id="alerts-log">
+    <div class="alert-item"><span class="alert-time">--:--:--</span><span class="alert-msg" style="color:var(--muted)">No alerts yet — system nominal.</span></div>
+  </div>
+
+  <!-- RECENT READINGS TABLE -->
+  <div class="section-title">📋 Recent Readings Log</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Time</th><th>Pond</th>
+        <th>DO (mg/L)</th><th>Temp (°C)</th><th>pH</th><th>Turbidity</th>
+        <th>Health</th><th>Status</th><th>Aerator</th><th>Anomaly</th>
+      </tr></thead>
+      <tbody id="readings-table"></tbody>
+    </table>
+  </div>
+
+</main>
+
+<footer>PondIQ — "Fitbit + Smart Automation for Aquaculture" &nbsp;·&nbsp; Real-time Fish Pond Health Monitor &nbsp;·&nbsp; IBM Final Project</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<script>
+// ── CONFIG & STATE ──────────────────────────────────────────────────────────
+const MAX_POINTS = 60;
+const TABLE_ROWS = 15;
+const POND_NAMES = ['Pond A','Pond B','Pond C'];
+const POND_SEEDS = [42, 137, 271];
+const POND_OFFSETS = [0, -1.2, 0.8]; // different DO baselines per pond
+
+let simRunning  = true;
+let simInterval = null;
+let simSpeed    = 800;
+let stepCount   = 0;
+let crisisMode  = false;
+let crisisSteps = 0;
+let activePond  = 0;
+let sessionStart = Date.now();
+
+// Per-pond state
+const pondState = POND_SEEDS.map((s, i) => ({
+  seed: s, prevDO: 7.5 + POND_OFFSETS[i],
+  prevTemp: 27, prevPh: 7.5, prevTurb: 22,
+  buf: { labels:[], do:[], temp:[], ph:[], turb:[], health:[] },
+  allDO: [], crisisCount: 0, anomalyCount: 0, aeratorCount: 0,
+  crisisMode: false, crisisSteps: 0,
+}));
+
+// Session stats
+let totalReadings = 0;
+let exportData = [];
+
+// ── SEEDED PRNG ─────────────────────────────────────────────────────────────
+function mkRng(s) {
+  let seed = s;
+  return {
+    rng() { seed=(seed*1664525+1013904223)&0xffffffff; return(seed>>>0)/4294967296; },
+    randn() {
+      let u=0,v=0;
+      while(u===0) u=this.rng(); while(v===0) v=this.rng();
+      return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+    }
+  };
+}
+const prngs = POND_SEEDS.map(s => mkRng(s));
+
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+
+// ── DATA GENERATION ─────────────────────────────────────────────────────────
+function generateReading(pondIdx) {
+  const ps   = pondState[pondIdx];
+  const prng = prngs[pondIdx];
+  const now  = new Date();
+  const hour = now.getHours();
+  const mon  = now.getMonth()+1;
+
+  const tempTarget = 27 + 3*Math.sin(2*Math.PI*(hour-6)/24) + 2*Math.sin(2*Math.PI*(mon-3)/12);
+  const temp = clamp(ps.prevTemp + 0.3*(tempTarget-ps.prevTemp) + prng.randn()*0.25, 20, 36);
+
+  const phTarget = 7.5 + 0.5*Math.sin(2*Math.PI*(hour-6)/24);
+  const ph = clamp(ps.prevPh + 0.2*(phTarget-ps.prevPh) + prng.randn()*0.08, 6.0, 9.5);
+
+  const turbTarget = 20 + 5*Math.sin(2*Math.PI*hour/24);
+  const turb = clamp(ps.prevTurb + 0.2*(turbTarget-ps.prevTurb) + Math.abs(prng.randn())*1.5, 5, 80);
+
+  const doBase = 7.5 + POND_OFFSETS[pondIdx] + 2.5*Math.sin(2*Math.PI*(hour-4)/24) - 0.2*(temp-27);
+  let doTarget = doBase;
+  if (ps.crisisMode) {
+    doTarget -= 4.0 + prng.randn()*0.5;
+    ps.crisisSteps--;
+    if (ps.crisisSteps <= 0) ps.crisisMode = false;
+  }
+  const doVal = clamp(ps.prevDO + 0.4*(doTarget-ps.prevDO) + prng.randn()*0.2, 0.5, 14);
+
+  ps.prevDO=doVal; ps.prevTemp=temp; ps.prevPh=ph; ps.prevTurb=turb;
+  ps.allDO.push(doVal);
+
+  return { time: now.toLocaleTimeString(), do: +doVal.toFixed(3), temp: +temp.toFixed(2), ph: +ph.toFixed(2), turb: +turb.toFixed(2), hour, pond: POND_NAMES[pondIdx] };
+}
+
+// ── FISH HEALTH SCORE (0-100) ────────────────────────────────────────────────
+function fishHealthScore(doVal, temp, ph, turb) {
+  // DO: ideal 7-10, critically low <4, penalty curve
+  const doScore  = clamp((doVal - 1) / 9 * 100, 0, 100);
+  // Temp: ideal 24-30
+  const tDiff    = Math.abs(temp - 27);
+  const tScore   = clamp(100 - tDiff * 8, 0, 100);
+  // pH: ideal 7-8
+  const phDiff   = Math.abs(ph - 7.5);
+  const phScore  = clamp(100 - phDiff * 30, 0, 100);
+  // Turbidity: ideal < 30
+  const turbScore= clamp(100 - (turb - 10) * 1.5, 0, 100);
+  return Math.round(doScore*0.45 + tScore*0.25 + phScore*0.20 + turbScore*0.10);
+}
+
+function healthGrade(score) {
+  if (score >= 85) return { grade:'A — Excellent 🟢', color:'#3fb950' };
+  if (score >= 70) return { grade:'B — Good 🟡',      color:'#d29922' };
+  if (score >= 50) return { grade:'C — Fair 🟠',      color:'#f0883e' };
+  return                   { grade:'D — Poor 🔴',     color:'#f85149' };
+}
+
+// ── ML PROXIES ───────────────────────────────────────────────────────────────
+function forecastDO(history) {
+  if (history.length < 4) return history[history.length-1]||7.5;
+  const n = history.length;
+  const slice = history.slice(-Math.min(16,n));
+  const weights = slice.map((_,i)=>i+1);
+  const wSum = weights.reduce((a,b)=>a+b,0);
+  const wma  = slice.reduce((acc,v,i)=>acc+v*weights[i],0)/wSum;
+  const trend= (slice[slice.length-1]-slice[0])/slice.length;
+  return clamp(+(wma+trend*0.3).toFixed(3), 0.5, 14);
+}
+
+function anomalyScore(doHistory, doVal, ph) {
+  if (doHistory.length < 10) return { score:0.1, isAnomaly:false };
+  const mu  = doHistory.reduce((a,b)=>a+b,0)/doHistory.length;
+  const sig = Math.sqrt(doHistory.reduce((a,b)=>a+(b-mu)**2,0)/doHistory.length)||1;
+  const zDO = Math.abs(doVal-mu)/sig;
+  const zPH = Math.abs(ph-7.5)/0.5;
+  const score = clamp((zDO*0.6+zPH*0.4)/4, 0, 1);
+  return { score:+score.toFixed(4), isAnomaly: score > 0.45 };
+}
+
+function aeratorDecision(doVal, forecast, temp) {
+  const prob = clamp((5.5-doVal)/3*0.6 + (5.5-forecast)/3*0.3 + (temp-27)/10*0.1, 0, 1);
+  return { on: prob>0.45, confidence:+prob.toFixed(4) };
+}
+
+// ── WEATHER SIMULATION ────────────────────────────────────────────────────────
+const WEATHER_CONDITIONS = [
+  {label:'Sunny',         icon:'☀️'},
+  {label:'Partly Cloudy', icon:'⛅'},
+  {label:'Cloudy',        icon:'☁️'},
+  {label:'Rainy',         icon:'🌧️'},
+  {label:'Stormy',        icon:'⛈️'},
+];
+let weatherIdx = 1;
+let weatherTimer = 0;
+
+function updateWeather() {
+  weatherTimer++;
+  if (weatherTimer % 40 === 0) {
+    weatherIdx = Math.floor(Math.random() * WEATHER_CONDITIONS.length);
+  }
+  const w = WEATHER_CONDITIONS[weatherIdx];
+  document.getElementById('w-icon').textContent = w.icon;
+  document.getElementById('w-condition').textContent = w.label;
+  document.getElementById('w-wind').textContent = (8 + Math.random()*22).toFixed(1);
+  document.getElementById('w-hum').textContent  = (55 + Math.random()*35).toFixed(0);
+  document.getElementById('w-cloud').textContent= (weatherIdx*20 + Math.random()*15).toFixed(0);
+}
+
+// ── SPARKLINE CHARTS ──────────────────────────────────────────────────────────
+function mkSpark(id, color) {
+  return new Chart(document.getElementById(id), {
+    type:'line',
+    data:{ labels:[], datasets:[{ data:[], borderColor:color, borderWidth:1.5, pointRadius:0, fill:false, tension:0.4 }] },
+    options:{ responsive:false, animation:false, plugins:{legend:{display:false}}, scales:{ x:{display:false}, y:{display:false} } }
+  });
+}
+const sparks = {
+  do:   mkSpark('spark-do',   '#58a6ff'),
+  temp: mkSpark('spark-temp', '#f0883e'),
+  ph:   mkSpark('spark-ph',   '#3fb950'),
+  turb: mkSpark('spark-turb', '#d2a679'),
+};
+function updateSpark(key, val) {
+  const c = sparks[key];
+  c.data.labels.push('');
+  c.data.datasets[0].data.push(val);
+  if (c.data.labels.length > 20) { c.data.labels.shift(); c.data.datasets[0].data.shift(); }
+  c.update('none');
+}
+
+// ── MAIN CHARTS ───────────────────────────────────────────────────────────────
+const DARK_GRID = 'rgba(255,255,255,0.05)';
+const CHART_OPTS = (minY,maxY) => ({
+  responsive:true, animation:false,
+  plugins:{ legend:{display:false} },
+  scales:{
+    x:{ ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:8}, grid:{color:DARK_GRID} },
+    y:{ min:minY, max:maxY, ticks:{color:'#8b949e',font:{size:10}}, grid:{color:DARK_GRID} }
+  }
+});
+
+const doChart = new Chart(document.getElementById('doChart'), {
+  type:'line',
+  data:{ labels:[], datasets:[
+    { label:'DO', data:[], borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,.08)', borderWidth:2, pointRadius:0, fill:true, tension:0.4 },
+    { label:'Crisis', data:[], borderColor:'rgba(248,81,73,.5)', borderDash:[6,4], borderWidth:1.5, pointRadius:0, fill:false, tension:0 },
+    { label:'Alert',  data:[], borderColor:'rgba(210,153,34,.5)', borderDash:[6,4], borderWidth:1.5, pointRadius:0, fill:false, tension:0 },
+  ]},
+  options: CHART_OPTS(0, 14),
+});
+
+const tempChart = new Chart(document.getElementById('tempChart'),{type:'line',data:{labels:[],datasets:[{label:'Temp',data:[],borderColor:'#f0883e',backgroundColor:'rgba(240,136,62,.08)',borderWidth:2,pointRadius:0,fill:true,tension:0.4}]},options:CHART_OPTS(20,38)});
+const phChart   = new Chart(document.getElementById('phChart'),  {type:'line',data:{labels:[],datasets:[{label:'pH',  data:[],borderColor:'#3fb950',backgroundColor:'rgba(63,185,80,.08)', borderWidth:2,pointRadius:0,fill:true,tension:0.4}]},options:CHART_OPTS(5.5,10)});
+const turbChart = new Chart(document.getElementById('turbChart'),{type:'line',data:{labels:[],datasets:[{label:'Turb',data:[],borderColor:'#d2a679',backgroundColor:'rgba(210,166,121,.08)',borderWidth:2,pointRadius:0,fill:true,tension:0.4}]},options:CHART_OPTS(0,90)});
+
+const gaugeChart = new Chart(document.getElementById('gaugeChart'),{
+  type:'doughnut',
+  data:{datasets:[{data:[7.5,6.5],backgroundColor:['#58a6ff','#21262d'],borderWidth:0,circumference:220,rotation:-110}]},
+  options:{responsive:true,animation:{duration:400},plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}
+});
+
+const healthRing = new Chart(document.getElementById('healthRing'),{
+  type:'doughnut',
+  data:{datasets:[{data:[75,25],backgroundColor:['#3fb950','#21262d'],borderWidth:0,circumference:360,rotation:0}]},
+  options:{responsive:false,animation:{duration:400},plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'68%'}
+});
+
+// Radar chart
+const radarChart = new Chart(document.getElementById('radarChart'),{
+  type:'radar',
+  data:{
+    labels:['DO','Temp','pH','Turbidity','Forecast','Health'],
+    datasets:[{
+      label:'Current', data:[0,0,0,0,0,0],
+      borderColor:'#58a6ff', backgroundColor:'rgba(88,166,255,.15)',
+      borderWidth:2, pointBackgroundColor:'#58a6ff', pointRadius:3
+    }]
+  },
+  options:{
+    responsive:true, animation:false,
+    plugins:{legend:{display:false}},
+    scales:{r:{
+      ticks:{display:false,stepSize:20},
+      grid:{color:'rgba(255,255,255,.08)'},
+      pointLabels:{color:'#8b949e',font:{size:11}},
+      suggestedMin:0, suggestedMax:100
+    }}
+  }
+});
+
+// Scatter chart (DO vs Temp)
+const scatterChart = new Chart(document.getElementById('scatterChart'),{
+  type:'scatter',
+  data:{datasets:[{
+    label:'DO vs Temp',
+    data:[],
+    backgroundColor:'rgba(88,166,255,.5)',
+    pointRadius:3,
+  }]},
+  options:{
+    responsive:true, animation:false,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{title:{display:true,text:'Temperature (°C)',color:'#8b949e',font:{size:10}}, ticks:{color:'#8b949e',font:{size:10}}, grid:{color:DARK_GRID}},
+      y:{title:{display:true,text:'DO (mg/L)',color:'#8b949e',font:{size:10}}, ticks:{color:'#8b949e',font:{size:10}}, grid:{color:DARK_GRID}, min:0, max:14}
+    }
+  }
+});
+
+// ── UI HELPERS ────────────────────────────────────────────────────────────────
+function doColor(v){ return v<4?'#f85149':v<5?'#d29922':v<6?'#f0883e':'#58a6ff'; }
+function doStatus(v){
+  if(v<4) return{text:'🔴 CRITICAL',cls:'alert-critical'};
+  if(v<5) return{text:'🟡 WARNING', cls:'alert-warning'};
+  if(v<6) return{text:'🟠 CAUTION', cls:'alert-normal'};
+  return         {text:'🟢 NORMAL', cls:'alert-normal'};
+}
+
+function showToast(msg, color='var(--text)') {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<span style="color:${color}">${msg}</span>`;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+function addAlert(msg, color='var(--muted)') {
+  const log  = document.getElementById('alerts-log');
+  const time = new Date().toLocaleTimeString();
+  const item = document.createElement('div');
+  item.className = 'alert-item';
+  item.innerHTML = `<span class="alert-time">${time}</span><span class="alert-msg" style="color:${color}">${msg}</span>`;
+  // remove placeholder
+  if (log.children.length === 1 && log.children[0].querySelector('.alert-msg').textContent.startsWith('No alerts')) log.innerHTML='';
+  log.insertBefore(item, log.firstChild);
+  while (log.children.length > 30) log.removeChild(log.lastChild);
+}
+
+// ── UPTIME BAR ────────────────────────────────────────────────────────────────
+const uptimeHistory = [];
+function updateUptimeBar(doVal) {
+  const color = doVal<4?'#f85149':doVal<5?'#d29922':'#3fb950';
+  uptimeHistory.push(color);
+  if (uptimeHistory.length > MAX_POINTS) uptimeHistory.shift();
+  const bar = document.getElementById('uptime-bar');
+  bar.innerHTML = uptimeHistory.map(c=>`<div class="uptime-seg" style="background:${c}"></div>`).join('');
+}
+
+// ── CHART UPDATES ─────────────────────────────────────────────────────────────
+function pushBuf(r, ps) {
+  const b = ps.buf;
+  ['labels','do','temp','ph','turb'].forEach((k,i)=>{
+    b[k].push([r.time,r.do,r.temp,r.ph,r.turb][i]);
+    if(b[k].length>MAX_POINTS) b[k].shift();
+  });
+}
+
+function updateCharts(ps) {
+  doChart.data.labels = ps.buf.labels;
+  doChart.data.datasets[0].data = ps.buf.do;
+  doChart.data.datasets[1].data = Array(ps.buf.labels.length).fill(4.0);
+  doChart.data.datasets[2].data = Array(ps.buf.labels.length).fill(5.0);
+  doChart.update('none');
+  [[tempChart,'temp'],[phChart,'ph'],[turbChart,'turb']].forEach(([c,k])=>{
+    c.data.labels = ps.buf.labels;
+    c.data.datasets[0].data = ps.buf[k];
+    c.update('none');
+  });
+  // Scatter: push last point
+  if (scatterChart.data.datasets[0].data.length > 80)
+    scatterChart.data.datasets[0].data.shift();
+  scatterChart.data.datasets[0].data.push({x: ps.prevTemp, y: ps.prevDO});
+  scatterChart.update('none');
+}
+
+function updateGauge(doVal) {
+  const color = doColor(doVal);
+  gaugeChart.data.datasets[0].data = [doVal, 14-doVal];
+  gaugeChart.data.datasets[0].backgroundColor = [color,'#21262d'];
+  gaugeChart.update();
+  document.getElementById('gauge-value').textContent = doVal.toFixed(2);
+  document.getElementById('gauge-value').style.color = color;
+  document.getElementById('gauge-label').textContent = doVal<4?'mg/L ⚠️':'mg/L';
+}
+
+function updateHealthRing(score) {
+  const g = healthGrade(score);
+  healthRing.data.datasets[0].data = [score, 100-score];
+  healthRing.data.datasets[0].backgroundColor = [g.color,'#21262d'];
+  healthRing.update();
+  document.getElementById('health-num').textContent = score;
+  document.getElementById('health-num').style.color = g.color;
+  document.getElementById('health-grade').textContent = g.grade;
+  document.getElementById('health-grade').style.color = g.color;
+  document.getElementById('kpi-health').textContent = score;
+  document.getElementById('kpi-health').style.color = g.color;
+  document.getElementById('kpi-health-grade').textContent = g.grade;
+}
+
+function updateRadar(r, forecast, health) {
+  const norm = (v,lo,hi) => clamp((v-lo)/(hi-lo)*100,0,100);
+  radarChart.data.datasets[0].data = [
+    norm(r.do, 0, 14),
+    100 - norm(Math.abs(r.temp-27), 0, 10),
+    100 - norm(Math.abs(r.ph-7.5), 0, 2),
+    100 - norm(r.turb, 0, 80),
+    norm(forecast, 0, 14),
+    health
+  ];
+  radarChart.update('none');
+}
+
+function updateKPIs(r, prev) {
+  document.getElementById('kpi-do').textContent   = r.do.toFixed(2);
+  document.getElementById('kpi-temp').textContent = r.temp.toFixed(1);
+  document.getElementById('kpi-ph').textContent   = r.ph.toFixed(2);
+  document.getElementById('kpi-turb').textContent = r.turb.toFixed(1);
+  document.getElementById('kpi-status').textContent = doStatus(r.do).text;
+  document.getElementById('kpi-do').style.color = doColor(r.do);
+  const delta=(curr,p,u)=>{ if(!p)return'—'; const d=+(curr-p).toFixed(2); return`${d>=0?'+':''}${d} ${u}`; };
+  if(prev){
+    document.getElementById('kpi-do-delta').textContent   = delta(r.do,  prev.do,  'mg/L');
+    document.getElementById('kpi-temp-delta').textContent = delta(r.temp,prev.temp,'°C');
+    document.getElementById('kpi-ph-delta').textContent   = delta(r.ph,  prev.ph,  '');
+    document.getElementById('kpi-turb-delta').textContent = delta(r.turb,prev.turb,'NTU');
+  }
+  updateSpark('do',   r.do);
+  updateSpark('temp', r.temp);
+  updateSpark('ph',   r.ph);
+  updateSpark('turb', r.turb);
+}
+
+function updateBanner(doVal) {
+  const b = document.getElementById('alert-banner');
+  if (doVal < 5) {
+    b.style.display='block';
+    b.className = doStatus(doVal).cls;
+    b.textContent = doVal<4
+      ? `🚨 CRITICAL — DO is ${doVal} mg/L! Fish mortality risk. Aerator activated!`
+      : `⚠️ WARNING — DO is ${doVal} mg/L (below safe 5 mg/L). Aerator activated.`;
+  } else { b.style.display='none'; }
+}
+
+function updatePredictions(r, ps) {
+  const forecast = forecastDO(ps.buf.do);
+  const anomaly  = anomalyScore(ps.buf.do, r.do, r.ph);
+  const aerator  = aeratorDecision(r.do, forecast, r.temp);
+
+  document.getElementById('pred-do').textContent = forecast.toFixed(3);
+  document.getElementById('pred-do').style.color = doColor(forecast);
+  document.getElementById('pred-do-bar').style.width = clamp(forecast/14*100,0,100)+'%';
+  document.getElementById('pred-do-bar').style.background = doColor(forecast);
+
+  const sp = (anomaly.score*100).toFixed(1);
+  document.getElementById('pred-anomaly').textContent = anomaly.isAnomaly?'⚠️ ANOMALY':'✅ NORMAL';
+  document.getElementById('pred-anomaly').style.color = anomaly.isAnomaly?'#f85149':'#3fb950';
+  document.getElementById('pred-anomaly-label').textContent = `Score: ${sp}%`;
+  document.getElementById('pred-anomaly-bar').style.width = sp+'%';
+  document.getElementById('pred-anomaly-bar').style.background = anomaly.isAnomaly?'#f85149':'#3fb950';
+
+  const conf = (aerator.confidence*100).toFixed(1);
+  document.getElementById('pred-aerator').textContent = aerator.on?'🟢 ON':'⚪ OFF';
+  document.getElementById('pred-aerator').style.color = aerator.on?'#3fb950':'#8b949e';
+  document.getElementById('pred-aerator-label').textContent = `Confidence: ${conf}%`;
+  document.getElementById('pred-aerator-bar').style.width = conf+'%';
+  document.getElementById('pred-aerator-bar').style.background = aerator.on?'#3fb950':'#8b949e';
+  document.getElementById('kpi-aerator').textContent = `Aerator: ${aerator.on?'🟢 ON':'⚪ OFF'}`;
+
+  return { forecast, anomaly, aerator };
+}
+
+function updateStats(ps) {
+  totalReadings++;
+  const elapsed = Math.floor((Date.now()-sessionStart)/1000);
+  const h=Math.floor(elapsed/3600), m=Math.floor((elapsed%3600)/60), s=elapsed%60;
+  document.getElementById('stat-uptime').textContent    = h>0?`${h}h ${m}m ${s}s`:`${m}m ${s}s`;
+  document.getElementById('stat-readings').textContent  = totalReadings;
+  document.getElementById('stat-crisis').textContent    = pondState.reduce((a,p)=>a+p.crisisCount,0);
+  document.getElementById('stat-anomalies').textContent = pondState.reduce((a,p)=>a+p.anomalyCount,0);
+  document.getElementById('stat-aerator').textContent   = pondState.reduce((a,p)=>a+p.aeratorCount,0);
+  const allDO = ps.allDO;
+  if (allDO.length) {
+    document.getElementById('stat-avgdo').textContent = (allDO.reduce((a,b)=>a+b,0)/allDO.length).toFixed(2)+' mg/L';
+    document.getElementById('stat-mindo').textContent = Math.min(...allDO).toFixed(2)+' mg/L';
+    document.getElementById('stat-maxdo').textContent = Math.max(...allDO).toFixed(2)+' mg/L';
+  }
+}
+
+function updateTable(r, preds, health) {
+  const tbody = document.getElementById('readings-table');
+  const s = doStatus(r.do);
+  const tagCls = r.do<4?'tag-critical':r.do<5?'tag-warning':'tag-normal';
+  const g = healthGrade(health);
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td style="color:var(--muted)">${totalReadings}</td>
+    <td>${r.time}</td>
+    <td style="color:var(--muted)">${r.pond}</td>
+    <td style="color:${doColor(r.do)};font-weight:600">${r.do.toFixed(3)}</td>
+    <td>${r.temp.toFixed(2)}</td>
+    <td>${r.ph.toFixed(2)}</td>
+    <td>${r.turb.toFixed(2)}</td>
+    <td style="color:${g.color};font-weight:600">${health}</td>
+    <td><span class="tag ${tagCls}">${s.text}</span></td>
+    <td><span class="tag ${preds.aerator.on?'tag-on':'tag-off'}">${preds.aerator.on?'ON':'OFF'}</span></td>
+    <td><span class="tag ${preds.anomaly.isAnomaly?'tag-critical':'tag-normal'}">${preds.anomaly.isAnomaly?'⚠️ Yes':'No'}</span></td>`;
+  tbody.insertBefore(row, tbody.firstChild);
+  while (tbody.children.length > TABLE_ROWS) tbody.removeChild(tbody.lastChild);
+}
+
+// ── EXPORT CSV ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (!exportData.length) { showToast('No data to export yet.', 'var(--yellow)'); return; }
+  const headers = ['#','Time','Pond','DO','Temp','pH','Turbidity','Health','Status','Aerator','Anomaly'];
+  const rows = exportData.map(d => [d.idx, d.time, d.pond, d.do, d.temp, d.ph, d.turb, d.health, d.status, d.aerator, d.anomaly].join(','));
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `pondiq_data_${Date.now()}.csv` });
+  a.click();
+  showToast(`✅ Exported ${exportData.length} rows to CSV`, 'var(--green)');
+}
+
+// ── MULTI-POND ────────────────────────────────────────────────────────────────
+function selectPond(idx) {
+  activePond = idx;
+  document.querySelectorAll('.pond-tab').forEach((t,i)=>t.classList.toggle('active', i===idx));
+  // redraw charts with that pond's buffer
+  const ps = pondState[idx];
+  updateCharts(ps);
+  showToast(`Switched to ${POND_NAMES[idx]}`, 'var(--accent)');
+}
+
+// ── THEME TOGGLE ──────────────────────────────────────────────────────────────
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  document.getElementById('theme-btn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+}
+
+// ── MAIN TICK ─────────────────────────────────────────────────────────────────
+let prevReading = null;
+
+function tick() {
+  // Generate for all ponds silently, display active
+  POND_NAMES.forEach((_,i) => {
+    const ps = pondState[i];
+    const r  = generateReading(i);
+    pushBuf(r, ps);
+
+    const health  = fishHealthScore(r.do, r.temp, r.ph, r.turb);
+    const forecast= forecastDO(ps.buf.do);
+    const anomaly = anomalyScore(ps.buf.do, r.do, r.ph);
+    const aerator = aeratorDecision(r.do, forecast, r.temp);
+
+    if (anomaly.isAnomaly) ps.anomalyCount++;
+    if (aerator.on) ps.aeratorCount++;
+
+    // Alert events for active pond
+    if (i === activePond) {
+      if (r.do < 4 && (!prevReading || prevReading.do >= 4)) {
+        ps.crisisCount++;
+        addAlert(`🔴 CRITICAL: DO dropped to ${r.do} mg/L in ${POND_NAMES[i]}!`, '#f85149');
+        showToast(`🔴 CRITICAL DO: ${r.do} mg/L — aerator activated!`, '#f85149');
+      } else if (r.do < 5 && (!prevReading || prevReading.do >= 5)) {
+        addAlert(`🟡 WARNING: DO below 5 mg/L (${r.do}) in ${POND_NAMES[i]}`, '#d29922');
+        showToast(`🟡 DO Warning: ${r.do} mg/L`, '#d29922');
+      }
+      if (anomaly.isAnomaly && (!prevReading || !anomalyScore(ps.buf.do.slice(0,-1), prevReading.do, prevReading.ph).isAnomaly)) {
+        addAlert(`⚠️ Anomaly detected in ${POND_NAMES[i]} — score: ${(anomaly.score*100).toFixed(1)}%`, '#d29922');
+      }
+      exportData.push({ idx:totalReadings+1, time:r.time, pond:r.pond, do:r.do, temp:r.temp, ph:r.ph, turb:r.turb, health, status:doStatus(r.do).text, aerator:aerator.on?'ON':'OFF', anomaly:anomaly.isAnomaly?'Yes':'No' });
+      if (exportData.length > 5000) exportData.shift();
+    }
+  });
+
+  // Update display for active pond
+  const ps  = pondState[activePond];
+  const r   = { ...ps.buf.labels[ps.buf.labels.length-1] && { time: ps.buf.labels[ps.buf.labels.length-1] },
+    do: ps.buf.do[ps.buf.do.length-1], temp: ps.prevTemp, ph: ps.prevPh, turb: ps.prevTurb,
+    time: ps.buf.labels[ps.buf.labels.length-1], pond: POND_NAMES[activePond] };
+  const preds = updatePredictions(r, ps);
+  const health = fishHealthScore(r.do, r.temp, r.ph, r.turb);
+
+  updateKPIs(r, prevReading);
+  updateBanner(r.do);
+  updateCharts(ps);
+  updateGauge(r.do);
+  updateHealthRing(health);
+  updateRadar(r, preds.forecast, health);
+  updateUptimeBar(r.do);
+  updateStats(ps);
+  updateTable(r, preds, health);
+  updateWeather();
+
+  prevReading = r;
+  stepCount++;
+}
+
+// ── CONTROLS ──────────────────────────────────────────────────────────────────
+function startSimulation() {
+  if (simInterval) clearInterval(simInterval);
+  simInterval = setInterval(tick, simSpeed);
+}
+function toggleSimulation() {
+  simRunning = !simRunning;
+  const btn = document.getElementById('btn-play');
+  if (simRunning) { startSimulation(); btn.textContent='⏸ Pause'; btn.classList.add('active'); }
+  else { clearInterval(simInterval); btn.textContent='▶ Play'; btn.classList.remove('active'); }
+}
+function injectCrisis() {
+  pondState[activePond].crisisMode  = true;
+  pondState[activePond].crisisSteps = 12 + Math.floor(Math.random()*8);
+  addAlert(`🔴 Crisis manually triggered in ${POND_NAMES[activePond]}`, '#f85149');
+  showToast(`⚠️ Crisis injected into ${POND_NAMES[activePond]}`, '#f85149');
+}
+function resetData() {
+  pondState.forEach(ps => {
+    ps.buf = {labels:[],do:[],temp:[],ph:[],turb:[],health:[]};
+    ps.allDO=[]; ps.crisisCount=0; ps.anomalyCount=0; ps.aeratorCount=0;
+    ps.prevDO=7.5; ps.prevTemp=27; ps.prevPh=7.5; ps.prevTurb=22;
+    ps.crisisMode=false;
+  });
+  prevReading=null; stepCount=0; totalReadings=0; exportData=[];
+  uptimeHistory.length=0;
+  sessionStart=Date.now();
+  document.getElementById('readings-table').innerHTML='';
+  document.getElementById('alert-banner').style.display='none';
+  document.getElementById('alerts-log').innerHTML='<div class="alert-item"><span class="alert-time">--:--:--</span><span class="alert-msg" style="color:var(--muted)">No alerts yet — system nominal.</span></div>';
+  [doChart,tempChart,phChart,turbChart].forEach(c=>{ c.data.labels=[]; c.data.datasets.forEach(d=>d.data=[]); c.update('none'); });
+  scatterChart.data.datasets[0].data=[]; scatterChart.update('none');
+  Object.values(sparks).forEach(c=>{ c.data.labels=[]; c.data.datasets[0].data=[]; c.update('none'); });
+  showToast('🔄 Data reset', 'var(--accent)');
+}
+function setSpeed(ms) {
+  simSpeed=ms;
+  document.querySelectorAll('[id^="speed-"]').forEach(b=>b.classList.remove('active'));
+  ({1500:'speed-1',800:'speed-2',300:'speed-3'})[ms] && document.getElementById(({1500:'speed-1',800:'speed-2',300:'speed-3'})[ms]).classList.add('active');
+  if(simRunning) startSimulation();
+}
+
+// Clock
+setInterval(()=>{ document.getElementById('clock').textContent=new Date().toLocaleTimeString(); },1000);
+
+// Kick off
+tick();
+startSimulation();
+
+// ── HEADER LOGO ────────────────────────────────────────────────────────────
+(function drawHeaderLogo() {
+  const canvas = document.getElementById('header-logo');
+  if (!canvas) return;
+  const W = 200, H = 56;
+  canvas.width  = W * 2;
+  canvas.height = H * 2;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+
+  // transparent bg
+  ctx.clearRect(0, 0, W, H);
+
+  // Fish icon
+  function drawFishSmall(x, y, size, color) {
+    const s = size / 48;
+    ctx.save(); ctx.translate(x, y);
+    ctx.beginPath(); ctx.ellipse(18*s,12*s,18*s,10*s,0,0,Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(2*s,12*s); ctx.lineTo(-14*s,2*s); ctx.lineTo(-14*s,22*s); ctx.closePath();
+    ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.arc(30*s,8*s,3*s,0,Math.PI*2); ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(31*s,7.5*s,1.2*s,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+    ctx.beginPath(); ctx.moveTo(20*s,4*s); ctx.quadraticCurveTo(24*s,-4*s,32*s,2*s); ctx.quadraticCurveTo(26*s,4*s,20*s,4*s);
+    ctx.globalAlpha=0.65; ctx.fillStyle=color; ctx.fill();
+    ctx.restore();
+  }
+
+  // tiny wave strip behind fish
+  const wY = H*0.55;
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(0, wY);
+  for(let x=0;x<=52;x+=3) ctx.lineTo(x, wY+Math.sin(x/52*Math.PI*3)*3);
+  ctx.lineTo(52,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle='rgba(88,166,255,0.13)'; ctx.fill();
+  ctx.restore();
+
+  // fish
+  drawFishSmall(4, H*0.5 - 14, 44, '#58a6ff');
+
+  // DO badge
+  ctx.save();
+  ctx.beginPath(); ctx.arc(45, 10, 8, 0, Math.PI*2);
+  ctx.fillStyle='#3fb950'; ctx.fill();
+  ctx.font='bold 7px -apple-system,sans-serif';
+  ctx.fillStyle='#0d1117'; ctx.textAlign='center';
+  ctx.fillText('DO', 45, 13);
+  ctx.restore();
+
+  // "Pond" text
+  ctx.save();
+  ctx.font='bold 28px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = document.documentElement.getAttribute('data-theme')==='light' ? '#1f2328' : '#e6edf3';
+  ctx.textAlign='left';
+  ctx.fillText('Pond', 56, H*0.58);
+
+  // "IQ" in accent blue
+  ctx.fillStyle='#58a6ff';
+  ctx.fillText('IQ', 56 + ctx.measureText('Pond').width + 2, H*0.58);
+  ctx.restore();
+
+  // Tagline
+  ctx.save();
+  ctx.font='11px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle='#8b949e';
+  ctx.textAlign='left';
+  ctx.fillText('Fish Pond Health Monitor', 57, H*0.82);
+  ctx.restore();
+})();
+
+// Re-render logo on theme toggle so colors stay in sync
+const _origToggleTheme = toggleTheme;
+// patch toggleTheme to also redraw logo after theme switch
+window.toggleTheme = function() {
+  _origToggleTheme();
+  // small delay so CSS variable update is applied first
+  setTimeout(() => {
+    const el = document.getElementById('header-logo');
+    if (el) { el.width = el.width; } // force clear — not ideal
+    // just re-call the IIFE wrapper via a named version
+    drawHeaderLogoNamed();
+  }, 50);
+};
+function drawHeaderLogoNamed() {
+  const canvas = document.getElementById('header-logo');
+  if (!canvas) return;
+  const W = 200, H = 56;
+  canvas.width  = W * 2; canvas.height = H * 2;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2); ctx.clearRect(0,0,W,H);
+  const wY = H*0.55;
+  ctx.save(); ctx.beginPath(); ctx.moveTo(0,wY);
+  for(let x=0;x<=52;x+=3) ctx.lineTo(x,wY+Math.sin(x/52*Math.PI*3)*3);
+  ctx.lineTo(52,H);ctx.lineTo(0,H);ctx.closePath();
+  ctx.fillStyle='rgba(88,166,255,0.13)';ctx.fill();ctx.restore();
+  const s=44/48;
+  ctx.save();ctx.translate(4,H*0.5-14);
+  ctx.beginPath();ctx.ellipse(18*s,12*s,18*s,10*s,0,0,Math.PI*2);ctx.fillStyle='#58a6ff';ctx.fill();
+  ctx.beginPath();ctx.moveTo(2*s,12*s);ctx.lineTo(-14*s,2*s);ctx.lineTo(-14*s,22*s);ctx.closePath();ctx.fillStyle='#58a6ff';ctx.fill();
+  ctx.beginPath();ctx.arc(30*s,8*s,3*s,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,0.45)';ctx.fill();
+  ctx.beginPath();ctx.arc(31*s,7.5*s,1.2*s,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();
+  ctx.restore();
+  ctx.save();ctx.beginPath();ctx.arc(45,10,8,0,Math.PI*2);ctx.fillStyle='#3fb950';ctx.fill();
+  ctx.font='bold 7px sans-serif';ctx.fillStyle='#0d1117';ctx.textAlign='center';ctx.fillText('DO',45,13);ctx.restore();
+  const isLight = document.documentElement.getAttribute('data-theme')==='light';
+  ctx.save();ctx.font='bold 28px -apple-system,"Segoe UI",sans-serif';ctx.textAlign='left';
+  ctx.fillStyle=isLight?'#1f2328':'#e6edf3'; ctx.fillText('Pond',56,H*0.58);
+  ctx.fillStyle='#58a6ff'; ctx.fillText('IQ',56+ctx.measureText('Pond').width+2,H*0.58);
+  ctx.restore();
+  ctx.save();ctx.font='11px -apple-system,sans-serif';ctx.fillStyle='#8b949e';ctx.textAlign='left';
+  ctx.fillText('Fish Pond Health Monitor',57,H*0.82);ctx.restore();
+}
+</script>
+</body>
+</html>

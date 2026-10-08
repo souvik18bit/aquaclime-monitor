@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>PondIQ Logo Generator</title>
+<style>
+  body { background:#0d1117; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; font-family:-apple-system,"Segoe UI",sans-serif; gap:32px; padding:40px; }
+  h1 { color:#e6edf3; font-size:16px; font-weight:500; letter-spacing:1px; text-transform:uppercase; color:#8b949e; }
+  .logo-row { display:flex; gap:32px; flex-wrap:wrap; justify-content:center; }
+  .logo-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .logo-label { font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:1px; }
+  .download-btn {
+    padding:7px 18px; border-radius:8px; border:1px solid #30363d;
+    background:#161b22; color:#58a6ff; font-size:12px; cursor:pointer;
+    transition:all .2s; margin-top:4px;
+  }
+  .download-btn:hover { background:#58a6ff; color:#000; }
+</style>
+</head>
+<body>
+<h1>PondIQ — Logo Variants</h1>
+<div class="logo-row" id="logo-row"></div>
+
+<script>
+// ── All logos are drawn on Canvas via pure SVG-in-canvas technique ──────────
+
+const logos = [
+  { id:'primary',    label:'Primary (Dark)',     bg:'#0d1117', draw: drawPrimary },
+  { id:'light',      label:'On White',           bg:'#ffffff', draw: drawLight   },
+  { id:'icon-only',  label:'Icon Only',          bg:'#0d1117', draw: drawIcon    },
+  { id:'badge',      label:'Badge / Pill',       bg:'#0d1117', draw: drawBadge   },
+];
+
+function drawPrimary(ctx, W, H) {
+  // Background rounded rect
+  roundRect(ctx, 0, 0, W, H, 20, '#161b22');
+
+  // Glowing water wave at bottom
+  drawWaves(ctx, W, H, 'rgba(88,166,255,0.18)', 'rgba(88,166,255,0.08)', H*0.68);
+
+  // Fish silhouette
+  drawFish(ctx, W*0.13, H*0.38, 54, '#58a6ff', 0.92);
+
+  // DO ring accent (top right)
+  drawRing(ctx, W*0.88, H*0.22, 22, '#3fb950', 0.82, '');
+
+  // Border glow
+  ctx.save();
+  ctx.strokeStyle = 'rgba(88,166,255,0.25)';
+  ctx.lineWidth = 2;
+  roundRectStroke(ctx, 1, 1, W-2, H-2, 19);
+  ctx.restore();
+
+  // Text: PondIQ
+  ctx.save();
+  ctx.font = 'bold 38px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = '#e6edf3';
+  ctx.letterSpacing = '-1px';
+  ctx.fillText('Pond', W*0.28, H*0.52);
+  ctx.fillStyle = '#58a6ff';
+  ctx.fillText('IQ', W*0.69, H*0.52);
+  ctx.restore();
+
+  // Tagline
+  ctx.save();
+  ctx.font = '12px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = '#8b949e';
+  ctx.fillText('Fish Pond Health Monitor', W*0.28, H*0.70);
+  ctx.restore();
+
+  // Small DO indicator dot
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(W*0.88, H*0.22, 8, 0, Math.PI*2);
+  ctx.fillStyle = '#3fb950';
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.font = 'bold 8px sans-serif';
+  ctx.fillStyle = '#0d1117';
+  ctx.textAlign = 'center';
+  ctx.fillText('DO', W*0.88, H*0.245);
+  ctx.restore();
+}
+
+function drawLight(ctx, W, H) {
+  roundRect(ctx, 0, 0, W, H, 20, '#ffffff');
+  drawWaves(ctx, W, H, 'rgba(88,166,255,0.12)', 'rgba(88,166,255,0.05)', H*0.68);
+  drawFish(ctx, W*0.13, H*0.38, 54, '#1a6bb5', 0.92);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(88,166,255,0.2)';
+  ctx.lineWidth = 2;
+  roundRectStroke(ctx, 1, 1, W-2, H-2, 19);
+  ctx.restore();
+
+  ctx.save();
+  ctx.font = 'bold 38px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = '#1f2328';
+  ctx.fillText('Pond', W*0.28, H*0.52);
+  ctx.fillStyle = '#1a6bb5';
+  ctx.fillText('IQ', W*0.69, H*0.52);
+  ctx.restore();
+
+  ctx.save();
+  ctx.font = '12px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = '#57606a';
+  ctx.fillText('Fish Pond Health Monitor', W*0.28, H*0.70);
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(W*0.88, H*0.22, 8, 0, Math.PI*2);
+  ctx.fillStyle = '#2da44e';
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.font = 'bold 8px sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText('DO', W*0.88, H*0.245);
+  ctx.restore();
+}
+
+function drawIcon(ctx, W, H) {
+  // Circular icon
+  const cx = W/2, cy = H/2, r = Math.min(W,H)*0.46;
+
+  // Outer circle gradient
+  const grad = ctx.createRadialGradient(cx, cy-r*0.2, r*0.1, cx, cy, r);
+  grad.addColorStop(0, '#1c2d4a');
+  grad.addColorStop(1, '#0d1117');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Ring border
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.strokeStyle = '#58a6ff';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Water fill at bottom
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r-2, 0, Math.PI*2);
+  ctx.clip();
+  drawWaves(ctx, W, H, 'rgba(88,166,255,0.22)', 'rgba(88,166,255,0.10)', cy+r*0.2);
+  ctx.restore();
+
+  // Fish centered
+  drawFish(ctx, cx-26, cy-12, 52, '#58a6ff', 1.0);
+
+  // DO label bottom
+  ctx.save();
+  ctx.font = 'bold 13px -apple-system,sans-serif';
+  ctx.fillStyle = '#3fb950';
+  ctx.textAlign = 'center';
+  ctx.fillText('DO', cx, cy + r*0.6);
+  ctx.restore();
+}
+
+function drawBadge(ctx, W, H) {
+  // Pill shape
+  const rx = H/2;
+  pillRect(ctx, 0, 0, W, H, rx, '#1a2332');
+
+  // Left colored pill
+  pillRect(ctx, 3, 3, H*1.2, H-6, (H-6)/2, '#58a6ff');
+
+  // Fish in left pill
+  drawFish(ctx, 10, H*0.5-10, 28, '#ffffff', 1.0);
+
+  // Border
+  ctx.save();
+  ctx.strokeStyle = 'rgba(88,166,255,0.35)';
+  ctx.lineWidth = 1.5;
+  pillRectStroke(ctx, 1, 1, W-2, H-2, rx-1);
+  ctx.restore();
+
+  // Text
+  ctx.save();
+  ctx.font = 'bold 22px -apple-system,"Segoe UI",sans-serif';
+  ctx.fillStyle = '#e6edf3';
+  ctx.fillText('Pond', H*1.4, H*0.64);
+  ctx.fillStyle = '#58a6ff';
+  ctx.fillText('IQ', H*1.4 + 60, H*0.64);
+  ctx.restore();
+}
+
+// ── DRAWING HELPERS ──────────────────────────────────────────────────────────
+
+function roundRect(ctx, x, y, w, h, r, fill) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+}
+
+function roundRectStroke(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function pillRect(ctx, x, y, w, h, r, fill) {
+  ctx.beginPath();
+  ctx.arc(x+r, y+r, r, Math.PI, Math.PI*1.5);
+  ctx.arc(x+w-r, y+r, r, Math.PI*1.5, 0);
+  ctx.arc(x+w-r, y+h-r, r, 0, Math.PI*0.5);
+  ctx.arc(x+r, y+h-r, r, Math.PI*0.5, Math.PI);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle=fill; ctx.fill(); }
+}
+
+function pillRectStroke(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.arc(x+r, y+r, r, Math.PI, Math.PI*1.5);
+  ctx.arc(x+w-r, y+r, r, Math.PI*1.5, 0);
+  ctx.arc(x+w-r, y+h-r, r, 0, Math.PI*0.5);
+  ctx.arc(x+r, y+h-r, r, Math.PI*0.5, Math.PI);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawWaves(ctx, W, H, color1, color2, baseY) {
+  // Wave 1
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (let x=0; x<=W; x+=4) {
+    ctx.lineTo(x, baseY + Math.sin(x/W*Math.PI*3)*8);
+  }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = color1;
+  ctx.fill();
+
+  // Wave 2
+  ctx.beginPath();
+  ctx.moveTo(0, baseY+10);
+  for (let x=0; x<=W; x+=4) {
+    ctx.lineTo(x, baseY+10 + Math.sin(x/W*Math.PI*4 + 1)*6);
+  }
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fillStyle = color2;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFish(ctx, x, y, size, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+
+  const s = size / 48;
+
+  // Body
+  ctx.beginPath();
+  ctx.ellipse(18*s, 12*s, 18*s, 10*s, 0, 0, Math.PI*2);
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(2*s, 12*s);
+  ctx.lineTo(-14*s, 2*s);
+  ctx.lineTo(-14*s, 22*s);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  // Eye
+  ctx.beginPath();
+  ctx.arc(30*s, 8*s, 3*s, 0, Math.PI*2);
+  ctx.fillStyle = '#0d1117';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(31*s, 7.5*s, 1.2*s, 0, Math.PI*2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Fin
+  ctx.beginPath();
+  ctx.moveTo(20*s, 4*s);
+  ctx.quadraticCurveTo(24*s, -4*s, 32*s, 2*s);
+  ctx.quadraticCurveTo(26*s, 4*s, 20*s, 4*s);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.fill();
+
+  // Gill line
+  ctx.beginPath();
+  ctx.arc(26*s, 12*s, 6*s, Math.PI*0.6, Math.PI*1.4);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1.5*s;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawRing(ctx, cx, cy, r, color, alpha, label) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Arc background
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  // Arc foreground
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI/2, Math.PI*1.1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── RENDER ALL LOGOS ─────────────────────────────────────────────────────────
+
+const row = document.getElementById('logo-row');
+
+const SIZES = {
+  'primary':   [380, 120],
+  'light':     [380, 120],
+  'icon-only': [120, 120],
+  'badge':     [260, 70],
+};
+
+logos.forEach(({id, label, bg, draw}) => {
+  const [W, H] = SIZES[id];
+
+  const wrap = document.createElement('div');
+  wrap.className = 'logo-wrap';
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = W * 2;   // retina
+  canvas.height = H * 2;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.style.borderRadius = '12px';
+  canvas.style.display = 'block';
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  draw(ctx, W, H);
+
+  const lbl = document.createElement('div');
+  lbl.className = 'logo-label';
+  lbl.textContent = label;
+
+  const btn = document.createElement('button');
+  btn.className = 'download-btn';
+  btn.textContent = '⬇ Download PNG';
+  btn.onclick = () => {
+    const a = document.createElement('a');
+    a.href     = canvas.toDataURL('image/png');
+    a.download = `pondiq-logo-${id}.png`;
+    a.click();
+  };
+
+  wrap.appendChild(canvas);
+  wrap.appendChild(lbl);
+  wrap.appendChild(btn);
+  row.appendChild(wrap);
+});
+</script>
+</body>
+</html>
